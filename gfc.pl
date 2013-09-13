@@ -95,6 +95,7 @@ my %pushed_dir;
 if ($mode eq 'test') {
     ftp_connect();
     print "Initial directory: $cwd\n";
+    find_remote_single(sub { print "$_[0]\n"; }, '', 1);
 } elsif ($mode eq 'status') {
     load_ignore();
     load_local();
@@ -449,7 +450,7 @@ sub pull_file {
 }
 
 sub find_remote_single {
-    my ($callback, $sub) = @_;
+    my ($callback, $sub, $no_recurse) = @_;
     my $subdir = $sub =~ m+/$+ || $sub eq '' ? $sub : $sub . '/';
     my @lines = keys %{{ map { $_ => 1 } $ftp->dir($sub), $ftp->dir($subdir . '.*') }};
     for my $line (@lines) {
@@ -464,7 +465,7 @@ sub find_remote_single {
                 }
                 my $is_dir = $type eq 'd';
                 &$callback($file, $is_dir);
-                if ($is_dir) {
+                if (!$no_recurse && $is_dir) {
                     find_remote_single($callback, $file . '/');
                 }
             }
