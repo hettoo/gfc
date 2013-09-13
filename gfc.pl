@@ -9,6 +9,11 @@ use File::Find;
 use File::Basename;
 use Digest::MD5;
 
+my $ftp;
+
+my $local_changed = 0;
+my $remote_changed = 0;
+
 my $mode = shift @ARGV;
 if (!defined $mode) {
     help();
@@ -32,15 +37,15 @@ while (!defined $gfc_dir && $base ne '') {
 $base .= '/';
 if ($mode eq 'init') {
     if (defined $gfc_dir) {
-        die "gfc dir already present: $gfc_dir";
+        error("gfc dir already present: $gfc_dir");
     }
     $gfc_dir = getcwd();
     $gfc_dir =~ s+/$++;
     $gfc_dir .= '/.gfc/';
-    mkdir $gfc_dir or die "Unable to create $gfc_dir";
+    mkdir $gfc_dir or error("unable to create $gfc_dir");
     exit;
 } elsif (!defined $gfc_dir) {
-    die "No gfc directory found, use gfc init first\n";
+    error("no gfc directory found, use gfc init first");
 }
 
 my @targets;
@@ -60,7 +65,7 @@ my $fh;
 my %config;
 my $config_file = $gfc_dir . 'config';
 assure_file($config_file);
-open $fh, '<', $config_file or die "Unable to open $config_file";
+open $fh, '<', $config_file or error("unable to open $config_file");
 while (my $line = <$fh>) {
     if ($line =~ /^\s*([a-zA-Z0-9]+)\s*=\s?(.*)$/) {
         my $name = $1;
@@ -92,8 +97,8 @@ if ($mode eq 'status') {
     exit;
 }
 
-my $ftp = Net::FTP->new($config{'host'}) or die "Could not connect: $!";
-$ftp->login($config{'user'}, $config{'password'}) or die "Could not login: $!";
+$ftp = Net::FTP->new($config{'host'}) or error("could not connect: $!");
+$ftp->login($config{'user'}, $config{'password'}) or error("could not login: $!");
 my $cwd = $ftp->pwd();
 if ($cwd !~ m+/$+) {
     $cwd .= '/';
@@ -106,34 +111,51 @@ if ($config{'dir'} !~ m+/$+) {
 }
 $cwd .= $config{'dir'};
 $ftp->mkdir($cwd, 1);
-$ftp->cwd($cwd) or die "Could not change remote working directory to $cwd";
-$ftp->binary();
+$ftp->cwd($cwd) or error("could not change remote working directory to $cwd");
+$ftp->binary() or error("could not change to binary mode");
 
 if ($mode eq 'pull') {
     load_ignore();
     load_remote();
     load_local();
     mode_pull();
-    save_remote();
-    save_local();
 } elsif ($mode eq 'push') {
     load_ignore();
     load_local();
     load_remote();
     mode_push();
-    save_local();
-    save_remote();
 } elsif ($mode eq 'help') {
     help(0);
 } else {
     help();
 }
 
-$ftp->quit();
-exit;
+quit();
+
+sub quit {
+    my ($fake) = @_;
+    if ($local_changed) {
+        save_local();
+    }
+    if ($remote_changed) {
+        save_remote();
+    }
+    if (defined $ftp) {
+        $ftp->quit();
+    }
+    if (!$fake) {
+        exit;
+    }
+}
+
+sub error {
+    my ($message) = @_;
+    quit(1);
+    die 'Error: ' . $message . "\n";
+}
 
 sub load_ignore {
-    open $fh, '<', $ignore_file or die "Unable to read $ignore_file";
+    open $fh, '<', $ignore_file or error("unable to read $ignore_file");
     while (my $line = <$fh>) {
         chomp $line;
         push @ignore, $line;
@@ -142,7 +164,7 @@ sub load_ignore {
 }
 
 sub load_local {
-    open $fh, '<', $local_file or die "Unable to read $local_file";
+    open $fh, '<', $local_file or error("unable to read $local_file");
     while (my $line = <$fh>) {
         if ($line =~ /^(\d+?) (.+?) (.+)$/) {
             my $mdtm = int($1);
@@ -156,7 +178,7 @@ sub load_local {
 }
 
 sub save_local {
-    open $fh, '>', $local_file or die "Unable to write $local_file";
+    open $fh, '>', $local_file or error("unable to write $local_file");
     while (my ($file, $mdtm) = each %local_mdtm) {
         if (defined $mdtm) {
             my $hash = $local_hash{$file};
@@ -167,7 +189,7 @@ sub save_local {
 }
 
 sub load_remote {
-    open $fh, '<', $remote_file or die "Unable to read $remote_file";
+    open $fh, '<', $remote_file or error("unable to read $remote_file");
     while (my $line = <$fh>) {
         if ($line =~ /^(\d+?) (.+)$/) {
             my $mdtm = int($1);
@@ -179,7 +201,7 @@ sub load_remote {
 }
 
 sub save_remote {
-    open $fh, '>', $remote_file or die "Unable to write $remote_file";
+    open $fh, '>', $remote_file or error("unable to write $remote_file");
     while (my ($file, $mdtm) = each %remote_mdtm) {
         if (defined $mdtm) {
             print $fh "$mdtm $file\n";
@@ -244,16 +266,18 @@ sub mode_push {
             print "> Deleting $file\n";
             my $mdtm_remote;
             if (defined $remote_mdtm{$file}) {
-                $mdtm_remote = $ftp->mdtm($file) or die "Unable to get modification time for $file";
+                $mdtm_remote = $ftp->mdtm($file) or error("unable to get modification time for $file");
                 $mdtm_remote = int($mdtm_remote);
             }
             if (defined $remote_mdtm{$file} && $mdtm_remote != $remote_mdtm{$file}) {
-                die "$file has changed on the server, pull first\n";
+                error("$file has changed on the server, pull first");
             }
             $ftp->delete($file);
             undef $remote_mdtm{$file};
+            $remote_changed = 1;
             undef $local_mdtm{$file};
             undef $local_hash{$file};
+            $local_changed = 1;
         }
     }
 }
@@ -316,18 +340,20 @@ sub push_file {
                 print "> Pushing $remote\n";
                 my $mdtm_remote;
                 if (defined $remote_mdtm{$remote}) {
-                    $mdtm_remote = $ftp->mdtm($remote) or die "Unable to get modification time for $remote";
+                    $mdtm_remote = $ftp->mdtm($remote) or error("unable to get modification time for $remote");
                     $mdtm_remote = int($mdtm_remote);
                 }
                 if (defined $remote_mdtm{$remote} && $mdtm_remote != $remote_mdtm{$remote}) {
-                    die "$remote has changed on the server, pull first\n";
+                    error("$remote has changed on the server, pull first\n");
                 } else {
-                    $ftp->put($file, $remote) or die "Unable to put $remote";
-                    $mdtm_remote = $ftp->mdtm($remote) or die "Unable to get modification time for $remote";
+                    $ftp->put($file, $remote) or error("unable to put $remote");
+                    $mdtm_remote = $ftp->mdtm($remote) or error("unable to get modification time for $remote");
                     $mdtm_remote = int($mdtm_remote);
                     $local_mdtm{$remote} = $mdtm;
                     $local_hash{$remote} = $hash;
+                    $local_changed = 1;
                     $remote_mdtm{$remote} = $mdtm_remote;
+                    $remote_changed = 1;
                 }
             }
         }
@@ -343,8 +369,10 @@ sub mode_pull {
                 unlink $base . $file;
                 undef $local_mdtm{$file};
                 undef $local_hash{$file};
+                $local_changed = 1;
             }
             undef $remote_mdtm{$file};
+            $remote_changed = 1;
         }
     }
 }
@@ -354,19 +382,21 @@ sub pull_file {
     my $local = $base . $file;
     if ($is_dir) {
         if (!-d $local) {
-            mkdir $local or die "Unable to create directory $local";
+            mkdir $local or error("unable to create directory $local");
         }
     } else {
-        my $mdtm = $ftp->mdtm($file) or die "Unable to get modification time for $file";
+        my $mdtm = $ftp->mdtm($file) or error("unable to get modification time for $file");
         $mdtm = int($mdtm);
         if (!defined $remote_mdtm{$file} || $mdtm != $remote_mdtm{$file}) {
             print "< Pulling $file\n";
-            $ftp->get($file, $local) or die "Unable to get $file";
+            $ftp->get($file, $local) or error("unable to get $file");
             $remote_mdtm{$file} = $mdtm;
+            $remote_changed = 1;
             my $mdtm_local = (stat $local)[9];
             my $hash = md5_file($local);
             $local_mdtm{$file} = $mdtm_local;
             $local_hash{$file} = $hash;
+            $local_changed = 1;
         }
         $found{$file} = 1;
     }
@@ -406,7 +436,7 @@ sub find_remote {
 sub md5_file {
     my ($file) = @_;
     my $ctx = Digest::MD5->new;
-    open my $fh, '<', $file or die "Unable to read $file\n";
+    open my $fh, '<', $file or error("unable to read $file\n");
     $ctx->addfile($fh);
     close $fh;
     return $ctx->hexdigest;
@@ -424,7 +454,7 @@ sub resolve_file {
 sub assure_file {
     my ($file) = @_;
     if (!-e $file) {
-        open $fh, '>>', $file or die "Unable to create $file";
+        open $fh, '>>', $file or error("unable to create $file");
         close $fh;
     }
 }
