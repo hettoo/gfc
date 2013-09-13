@@ -10,6 +10,7 @@ use File::Basename;
 use Digest::MD5;
 
 my $ftp;
+my $cwd;
 
 my $local_changed = 0;
 my $remote_changed = 0;
@@ -91,7 +92,10 @@ assure_file($remote_file);
 my %found;
 my %pushed_dir;
 
-if ($mode eq 'status') {
+if ($mode eq 'test') {
+    ftp_connect();
+    print "Initial directory: $cwd\n";
+} elsif ($mode eq 'status') {
     load_ignore();
     load_local();
     mode_status();
@@ -124,7 +128,7 @@ sub ftp_connect {
     }
     $ftp = Net::FTP->new($config{'host'}) or error("could not connect: $!");
     $ftp->login($config{'user'}, $config{'password'}) or error("could not login: $!");
-    my $cwd = $ftp->pwd();
+    $cwd = $ftp->pwd();
     if ($cwd !~ m+/$+) {
         $cwd .= '/';
     }
