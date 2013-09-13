@@ -131,6 +131,19 @@ if ($mode eq 'test') {
 
 quit();
 
+sub ftp_cd {
+    my ($sub) = @_;
+    if (!defined $sub) {
+        $sub = '/';
+    }
+    if ($sub !~ m+/$+) {
+        $sub .= '/';
+    }
+    $cwd .= $sub;
+    $ftp->mkdir($cwd, 1);
+    $ftp->cwd($cwd) or error("could not change remote working directory to $cwd");
+}
+
 sub ftp_connect {
     if (defined $ftp) {
         return;
@@ -141,15 +154,7 @@ sub ftp_connect {
     if ($cwd !~ m+/$+) {
         $cwd .= '/';
     }
-    if (!defined $config{'dir'}) {
-        $config{'dir'} = '/';
-    }
-    if ($config{'dir'} !~ m+/$+) {
-        $config{'dir'} .= '/';
-    }
-    $cwd .= $config{'dir'};
-    $ftp->mkdir($cwd, 1);
-    $ftp->cwd($cwd) or error("could not change remote working directory to $cwd");
+    ftp_cd($config{'dir'});
     $ftp->binary() or error("could not change to binary mode");
 }
 
@@ -488,6 +493,7 @@ sub mode_rmdir {
 
 sub mode_site {
     ftp_connect();
+    ftp_cd($offset);
     $ftp->site("@ARGV") or error("site command failed");
 }
 
