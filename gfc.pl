@@ -71,6 +71,10 @@ if ($config{'dir'} !~ m+/$+) {
 $cwd .= $config{'dir'};
 $ftp->cwd($cwd) or die "Could not change remote working directory to $cwd";
 
+my $ignore_file = $gfc_dir . 'ignore';
+my @ignore;
+assure_file($ignore_file);
+
 my $local_file = $gfc_dir . 'local';
 my %local_mdtm;
 my %local_hash;
@@ -81,15 +85,18 @@ my %remote_mdtm;
 assure_file($remote_file);
 
 if ($mode eq 'status') {
+    load_ignore();
     load_local();
     mode_status();
 } elsif ($mode eq 'pull') {
+    load_ignore();
     load_remote();
     load_local();
     mode_pull();
     save_remote();
     save_local();
 } elsif ($mode eq 'push') {
+    load_ignore();
     load_local();
     load_remote();
     mode_push();
@@ -103,6 +110,15 @@ if ($mode eq 'status') {
 
 $ftp->quit();
 exit;
+
+sub load_ignore {
+    open $fh, '<', $ignore_file or die "Unable to read $ignore_file";
+    while (my $line = <$fh>) {
+        chomp $line;
+        push @ignore, $line;
+    }
+    close $fh;
+}
 
 sub load_local {
     open $fh, '<', $local_file or die "Unable to read $local_file";
@@ -147,9 +163,30 @@ sub save_remote {
     close $fh;
 }
 
+sub file_match {
+    my ($file, $pattern) = @_;
+    if (length $file < length $pattern) {
+        return 0;
+    }
+    if ($file eq $pattern) {
+        return 1;
+    }
+    my $parent = dirname($file);
+    return file_match($parent, $pattern);
+}
+
 sub filter_file {
-    my ($file) = @_;
-    return $file ne '.' && $file ne '..' && $file ne '.gfc' && $file ne '.git' && $file !~ /\.(.*)\.sw.$/ && $file !~ /~$/;
+    my ($file, $dir) = @_;
+    if ($file ne '.' && $file ne '..' && $file ne '.gfc' && $file ne '.git' && $file !~ /\.(.*)\.sw.$/ && $file !~ /~$/) {
+        my $full_file = $dir . $file;
+        for my $ignore (@ignore) {
+            if (file_match($full_file, $base . $ignore)) {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    return 0;
 }
 
 sub mode_status {
@@ -163,9 +200,12 @@ sub mode_push {
 sub local_filter {
     my(@files) = @_;
     my $dir = $File::Find::dir;
+    if ($dir !~ m+/$+) {
+        $dir .= '/';
+    }
     my @result;
     for my $file (@files) {
-        if (filter_file($file)) {
+        if (filter_file($file, $dir)) {
             push @result, $file;
         }
     }
@@ -183,7 +223,9 @@ sub status_file {
         my $mdtm = (stat $file)[9];
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
-            if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
+            if (!defined $local_hash{$remote}) {
+                print "New file: $remote\n";
+            } elsif ($hash ne $local_hash{$remote}) {
                 print "Modified: $remote\n";
             }
         }
@@ -204,8 +246,11 @@ sub push_file {
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
             if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
-                my $mdtm_remote = $ftp->mdtm($remote) or die "Unable to get modification time for $remote";
-                $mdtm_remote = int($mdtm_remote);
+                my $mdtm_remote;
+                if (defined $remote_mdtm{$remote}) {
+                    $mdtm_remote = $ftp->mdtm($remote) or die "Unable to get modification time for $remote";
+                    $mdtm_remote = int($mdtm_remote);
+                }
                 if (defined $remote_mdtm{$remote} && $mdtm_remote != $remote_mdtm{$remote}) {
                     die "$remote has changed on the server, pull first\n";
                 } else {
@@ -255,7 +300,7 @@ sub find_remote {
         if ($line =~ /(.).+\s(.+?)\/?$/) {
             my $type = $1;
             my $file = $2;
-            if (filter_file($file)) {
+            if (filter_file($file, $base . $sub)) {
                 $file = $sub . $file;
                 &$callback($file, $type eq 'd');
                 find_remote($file . '/', $callback);
