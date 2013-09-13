@@ -16,12 +16,14 @@ if (!defined $mode) {
 
 my $base = getcwd();
 $base =~ s+/$++;
+my $offset = '';
 my $gfc_dir;
 while (!defined $gfc_dir && $base ne '') {
     $gfc_dir = $base . '/.gfc/';
     if (!-d $gfc_dir) {
         undef $gfc_dir;
         if ($base ne '') {
+            $offset = basename($base) . '/' . $offset;
             $base = dirname($base);
             $base =~ s+/$++;
         }
@@ -41,6 +43,18 @@ if ($mode eq 'init') {
     die "No gfc directory found, use gfc init first\n";
 }
 
+my @targets;
+my @targets_full;
+if (@ARGV) {
+    for my $target (@ARGV) {
+        push @targets, resolve_file($offset . $target);
+        push @targets_full, $base . resolve_file($offset . $target);
+    }
+} else {
+    push @targets, $base;
+    push @targets_full, $base;
+}
+
 my $fh;
 
 my %config;
@@ -55,23 +69,6 @@ while (my $line = <$fh>) {
     }
 }
 close $fh;
-
-my $ftp = Net::FTP->new($config{'host'}) or die "Could not connect: $!";
-$ftp->login($config{'user'}, $config{'password'}) or die "Could not login: $!";
-my $cwd = $ftp->pwd();
-if ($cwd !~ m+/$+) {
-    $cwd .= '/';
-}
-if (!defined $config{'dir'}) {
-    $config{'dir'} = '/';
-}
-if ($config{'dir'} !~ m+/$+) {
-    $config{'dir'} .= '/';
-}
-$cwd .= $config{'dir'};
-$ftp->mkdir($cwd, 1);
-$ftp->cwd($cwd) or die "Could not change remote working directory to $cwd";
-$ftp->binary();
 
 my $ignore_file = $gfc_dir . 'ignore';
 my @ignore;
@@ -90,7 +87,27 @@ if ($mode eq 'status') {
     load_ignore();
     load_local();
     mode_status();
-} elsif ($mode eq 'pull') {
+    exit;
+}
+
+my $ftp = Net::FTP->new($config{'host'}) or die "Could not connect: $!";
+$ftp->login($config{'user'}, $config{'password'}) or die "Could not login: $!";
+my $cwd = $ftp->pwd();
+if ($cwd !~ m+/$+) {
+    $cwd .= '/';
+}
+if (!defined $config{'dir'}) {
+    $config{'dir'} = '/';
+}
+if ($config{'dir'} !~ m+/$+) {
+    $config{'dir'} .= '/';
+}
+$cwd .= $config{'dir'};
+$ftp->mkdir($cwd, 1);
+$ftp->cwd($cwd) or die "Could not change remote working directory to $cwd";
+$ftp->binary();
+
+if ($mode eq 'pull') {
     load_ignore();
     load_remote();
     load_local();
@@ -192,11 +209,11 @@ sub filter_file {
 }
 
 sub mode_status {
-    find({'wanted' => \&status_file, 'preprocess' => \&local_filter}, $base);
+    find({'wanted' => \&status_file, 'preprocess' => \&local_filter}, @targets_full);
 }
 
 sub mode_push {
-    find({'wanted' => \&push_file, 'preprocess' => \&local_filter}, $base);
+    find({'wanted' => \&push_file, 'preprocess' => \&local_filter}, @targets_full);
 }
 
 sub local_filter {
@@ -270,7 +287,7 @@ sub push_file {
 }
 
 sub mode_pull {
-    find_remote('', \&pull_file);
+    find_remote(\&pull_file, @targets);
 }
 
 sub pull_file {
@@ -295,22 +312,34 @@ sub pull_file {
     }
 }
 
-sub find_remote {
-    my ($sub, $callback) = @_;
-    my @lines = keys %{{ map { $_ => 1 } $ftp->dir($sub . '*'), $ftp->dir($sub . '.*') }};
+sub find_remote_single {
+    my ($callback, $sub) = @_;
+    my $subdir = $sub =~ m+/$+ || $sub eq '' ? $sub : $sub . '/';
+    my @lines = keys %{{ map { $_ => 1 } $ftp->dir($sub), $ftp->dir($subdir . '.*') }};
     for my $line (@lines) {
         if ($line =~ /(.).+\s(.+?)\/?$/) {
             my $type = $1;
             my $file = $2;
             if (filter_file($file, $base . $sub)) {
-                $file = $sub . $file;
+                if ($sub =~ m+/$+ || $sub eq '') {
+                    $file = $subdir . $file;
+                } else {
+                    $file = $sub;
+                }
                 my $is_dir = $type eq 'd';
                 &$callback($file, $is_dir);
                 if ($is_dir) {
-                    find_remote($file . '/', $callback);
+                    find_remote_single($callback, $file . '/');
                 }
             }
         }
+    }
+}
+
+sub find_remote {
+    my ($callback, @list) = @_;
+    for my $sub (@list) {
+        find_remote_single($callback, $sub);
     }
 }
 
@@ -321,6 +350,15 @@ sub md5_file {
     $ctx->addfile($fh);
     close $fh;
     return $ctx->hexdigest;
+}
+
+sub resolve_file {
+    my ($file) = @_;
+    while ($file =~ s#(^|/)\./##g || $file =~ s#(^|/)\.$##g) {
+    }
+    while ($file =~ s#[^/]+/\.\./##g || $file =~ s#[^/]+/\.\.$##g) {
+    }
+    return $file;
 }
 
 sub assure_file {
