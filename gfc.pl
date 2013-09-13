@@ -204,13 +204,19 @@ sub push_file {
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
             if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
-                print "Pushing $remote\n";
-                $ftp->put($file, $remote) or die "Unable to put $remote";
-                $local_mdtm{$remote} = $mdtm;
-                $local_hash{$remote} = $hash;
                 my $mdtm_remote = $ftp->mdtm($remote) or die "Unable to get modification time for $remote";
                 $mdtm_remote = int($mdtm_remote);
-                $remote_mdtm{$remote} = $mdtm_remote;
+                if (defined $remote_mdtm{$remote} && $mdtm_remote != $remote_mdtm{$remote}) {
+                    die "$remote has changed on the server, pull first\n";
+                } else {
+                    print "Pushing $remote\n";
+                    $ftp->put($file, $remote) or die "Unable to put $remote";
+                    $mdtm_remote = $ftp->mdtm($remote) or die "Unable to get modification time for $remote";
+                    $mdtm_remote = int($mdtm_remote);
+                    $local_mdtm{$remote} = $mdtm;
+                    $local_hash{$remote} = $hash;
+                    $remote_mdtm{$remote} = $mdtm_remote;
+                }
             }
         }
     }
