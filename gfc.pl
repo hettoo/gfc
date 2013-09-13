@@ -181,9 +181,9 @@ sub status_file {
     my $is_dir = -d $file;
     if (!$is_dir) {
         my $mdtm = (stat $file)[9];
-        if ($mdtm != $local_mdtm{$remote}) {
+        if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
-            if ($hash ne $local_hash{$remote}) {
+            if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
                 print "Modified: $remote\n";
             }
         }
@@ -201,9 +201,9 @@ sub push_file {
         $ftp->mkdir($remote);
     } else {
         my $mdtm = (stat $file)[9];
-        if ($mdtm != $local_mdtm{$remote}) {
+        if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
-            if ($hash ne $local_hash{$remote}) {
+            if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
                 print "Pushing $remote\n";
                 $ftp->put($file, $remote) or die "Unable to put $remote";
                 $local_mdtm{$remote} = $mdtm;
@@ -230,7 +230,7 @@ sub pull_file {
     } else {
         my $mdtm = $ftp->mdtm($file) or die "Unable to get modification time for $file";
         $mdtm = int($mdtm);
-        if ($mdtm != $remote_mdtm{$file}) {
+        if (!defined $remote_mdtm{$file} || $mdtm != $remote_mdtm{$file}) {
             print "Pulling $file\n";
             $ftp->get($file, $local) or die "Unable to get $file";
             $remote_mdtm{$file} = $mdtm;
