@@ -321,7 +321,7 @@ sub status_file {
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
             if (!defined $local_hash{$remote}) {
-                print "New: $remote\n";
+                print "Added: $remote\n";
             } elsif ($hash ne $local_hash{$remote}) {
                 print "Modified: $remote\n";
             }
@@ -377,7 +377,7 @@ sub mode_sim {
     find_remote(\&sim_file, @targets);
     for my $file (keys %remote_mdtm) {
         if (matches_target($file) && !defined $found{$file}) {
-            if (defined $local_mdtm{$file}) {
+            if (-e $base . $file) {
                 print "Deleted: $file\n";
             }
         }
@@ -389,13 +389,14 @@ sub mode_pull {
     find_remote(\&pull_file, @targets);
     for my $file (keys %remote_mdtm) {
         if (matches_target($file) && !defined $found{$file}) {
-            if (defined $local_mdtm{$file}) {
-                print "< Deleting $file\n";
-                unlink $base . $file;
-                undef $local_mdtm{$file};
-                undef $local_hash{$file};
-                $local_changed = 1;
+            print "< Deleting $file\n";
+            my $local = $base . $file;
+            if (-e $local) {
+                unlink $local;
             }
+            undef $local_mdtm{$file};
+            undef $local_hash{$file};
+            $local_changed = 1;
             undef $remote_mdtm{$file};
             $remote_changed = 1;
         }
@@ -404,12 +405,15 @@ sub mode_pull {
 
 sub sim_file {
     my ($file, $is_dir) = @_;
-    my $local = $base . $file;
     if (!$is_dir) {
         my $mdtm = $ftp->mdtm($file) or error("unable to get modification time for $file");
         $mdtm = int($mdtm);
         if (!defined $remote_mdtm{$file} || $mdtm != $remote_mdtm{$file}) {
-            print "Changed: $file\n";
+            if (!-e $base . $file) {
+                print "Added: $file\n";
+            } else {
+                print "Modified: $file\n";
+            }
         }
         $found{$file} = 1;
     }
