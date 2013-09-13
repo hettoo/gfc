@@ -51,7 +51,7 @@ if (@ARGV) {
         push @targets_full, $base . resolve_file($offset . $target);
     }
 } else {
-    push @targets, $base;
+    push @targets, '';
     push @targets_full, $base;
 }
 
@@ -82,6 +82,8 @@ assure_file($local_file);
 my $remote_file = $gfc_dir . 'remote';
 my %remote_mdtm;
 assure_file($remote_file);
+
+my %found;
 
 if ($mode eq 'status') {
     load_ignore();
@@ -156,8 +158,10 @@ sub load_local {
 sub save_local {
     open $fh, '>', $local_file or die "Unable to write $local_file";
     while (my ($file, $mdtm) = each %local_mdtm) {
-        my $hash = $local_hash{$file};
-        print $fh "$mdtm $hash $file\n";
+        if (defined $mdtm) {
+            my $hash = $local_hash{$file};
+            print $fh "$mdtm $hash $file\n";
+        }
     }
     close $fh;
 }
@@ -177,13 +181,16 @@ sub load_remote {
 sub save_remote {
     open $fh, '>', $remote_file or die "Unable to write $remote_file";
     while (my ($file, $mdtm) = each %remote_mdtm) {
-        print $fh "$mdtm $file\n";
+        if (defined $mdtm) {
+            print $fh "$mdtm $file\n";
+        }
     }
     close $fh;
 }
 
 sub file_match {
     my ($file, $pattern) = @_;
+    $pattern =~ s+/$++;
     if (length $file < length $pattern) {
         return 0;
     }
@@ -191,7 +198,20 @@ sub file_match {
         return 1;
     }
     my $parent = dirname($file);
+    if ($parent eq '.') {
+        $parent = '';
+    }
     return file_match($parent, $pattern);
+}
+
+sub matches_target {
+    my ($file) = @_;
+    for my $target (@targets) {
+        if (file_match($file, $target)) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 sub filter_file {
@@ -210,10 +230,24 @@ sub filter_file {
 
 sub mode_status {
     find({'wanted' => \&status_file, 'preprocess' => \&local_filter}, @targets_full);
+    for my $file (keys %local_mdtm) {
+        if (!defined $found{$file}) {
+            print "Deleted: $file\n";
+        }
+    }
 }
 
 sub mode_push {
     find({'wanted' => \&push_file, 'preprocess' => \&local_filter}, @targets_full);
+    for my $file (keys %local_mdtm) {
+        if (matches_target($file) && !defined $found{$file}) {
+            print "Deleting $file\n";
+            $ftp->delete($file);
+            undef $remote_mdtm{$file};
+            undef $local_mdtm{$file};
+            undef $local_hash{$file};
+        }
+    }
 }
 
 sub local_filter {
@@ -233,10 +267,13 @@ sub local_filter {
 
 sub status_file {
     my $file = $File::Find::name;
+    my $remote;
     if ($file . '/' eq $base) {
-        return;
+        $remote = '';
+    } else {
+        $remote = substr $file, (length $base), length $file;
     }
-    my $remote = substr $file, (length $base), length $file;
+    $found{$remote} = 1;
     my $is_dir = -d $file;
     if (!$is_dir) {
         my $mdtm = (stat $file)[9];
@@ -253,13 +290,16 @@ sub status_file {
 
 sub push_file {
     my $file = $File::Find::name;
+    my $remote;
     if ($file . '/' eq $base) {
-        return;
+        $remote = '';
+    } else {
+        $remote = substr $file, (length $base), length $file;
     }
-    my $remote = substr $file, (length $base), length $file;
+    $found{$remote} = 1;
     my $is_dir = -d $file;
     if ($is_dir) {
-        $ftp->mkdir($remote);
+        $ftp->mkdir($remote, 1);
     } else {
         my $mdtm = (stat $file)[9];
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
@@ -288,6 +328,16 @@ sub push_file {
 
 sub mode_pull {
     find_remote(\&pull_file, @targets);
+    for my $file (keys %remote_mdtm) {
+        if (matches_target($file) && !defined $found{$file}) {
+            if (defined $local_mdtm{$file}) {
+                print "Deleting $file\n";
+                undef $local_mdtm{$file};
+                undef $local_hash{$file};
+            }
+            undef $remote_mdtm{$file};
+        }
+    }
 }
 
 sub pull_file {
@@ -309,6 +359,7 @@ sub pull_file {
             $local_mdtm{$file} = $mdtm_local;
             $local_hash{$file} = $hash;
         }
+        $found{$file} = 1;
     }
 }
 
