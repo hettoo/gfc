@@ -95,7 +95,7 @@ my %pushed_dir;
 if ($mode eq 'test') {
     ftp_connect();
     print "Initial directory: $cwd\n";
-    find_remote_single(sub { print "$_[1]\n"; }, @ARGV ? $ARGV[0] : '', 1);
+    find_remote_single(sub { print "$_[1]\n"; }, @targets ? $targets[0] : '', 1);
 } elsif ($mode eq 'status') {
     load_ignore();
     load_local();
@@ -115,6 +115,8 @@ if ($mode eq 'test') {
     load_local();
     load_remote();
     mode_push();
+} elsif ($mode eq 'rmdir') {
+    mode_rmdir();
 } elsif ($mode eq 'help') {
     help(0);
 } else {
@@ -446,6 +448,14 @@ sub pull_file {
             $local_changed = 1;
         }
         $found{$file} = 1;
+    }
+}
+
+sub mode_rmdir {
+    ftp_connect();
+    for my $target (@targets) {
+        $ftp->rmdir($target) or error("unable to rmdir $target");
+        rmdir $base . $target;
     }
 }
 
