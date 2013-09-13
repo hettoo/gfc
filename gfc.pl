@@ -38,7 +38,7 @@ if ($mode eq 'init') {
     mkdir $gfc_dir or die "Unable to create $gfc_dir";
     exit;
 } elsif (!defined $gfc_dir) {
-    die 'No gfc directory found, use gfc init first';
+    die "No gfc directory found, use gfc init first\n";
 }
 
 my $fh;
@@ -69,7 +69,9 @@ if ($config{'dir'} !~ m+/$+) {
     $config{'dir'} .= '/';
 }
 $cwd .= $config{'dir'};
+$ftp->mkdir($cwd, 1);
 $ftp->cwd($cwd) or die "Could not change remote working directory to $cwd";
+$ftp->binary();
 
 my $ignore_file = $gfc_dir . 'ignore';
 my @ignore;
