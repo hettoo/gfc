@@ -139,6 +139,9 @@ sub ftp_cd {
     if ($sub !~ m+/$+) {
         $sub .= '/';
     }
+    if ($cwd eq '/') {
+        $cwd = '';
+    }
     $cwd .= $sub;
     $ftp->mkdir($cwd, 1);
     $ftp->cwd($cwd) or error("could not change remote working directory to $cwd");
@@ -440,16 +443,13 @@ sub sim_file {
 sub pull_file {
     my ($file, $full, $is_dir) = @_;
     my $local = $base . $file;
-    if ($is_dir) {
-        if (!-d $local) {
-            mkdir $local or error("unable to create directory $local");
-        }
-    } else {
+    if (!$is_dir) {
         my $mdtm = $ftp->mdtm($file) or error("unable to get modification time for $file");
         $mdtm = int($mdtm);
         if (!defined $remote_mdtm{$file} || $mdtm != $remote_mdtm{$file}) {
             my $size = $ftp->size($file) or error("unable to get the size of $file");
             print "< Pulling $file ($size)\n";
+            make_path(dirname($local));
             $ftp->get($file, $local) or error("unable to get $file");
             $remote_mdtm{$file} = $mdtm;
             $remote_changed = 1;
