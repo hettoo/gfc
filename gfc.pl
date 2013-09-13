@@ -95,7 +95,7 @@ my %pushed_dir;
 if ($mode eq 'test') {
     ftp_connect();
     print "Initial directory: $cwd\n";
-    find_remote_single(sub { print "$_[0]\n"; }, '', 1);
+    find_remote_single(sub { print "$_[1]\n"; }, '', 1);
 } elsif ($mode eq 'status') {
     load_ignore();
     load_local();
@@ -409,7 +409,7 @@ sub mode_pull {
 }
 
 sub sim_file {
-    my ($file, $is_dir) = @_;
+    my ($file, $full, $is_dir) = @_;
     if (!$is_dir) {
         my $mdtm = $ftp->mdtm($file) or error("unable to get modification time for $file");
         $mdtm = int($mdtm);
@@ -425,7 +425,7 @@ sub sim_file {
 }
 
 sub pull_file {
-    my ($file, $is_dir) = @_;
+    my ($file, $full, $is_dir) = @_;
     my $local = $base . $file;
     if ($is_dir) {
         if (!-d $local) {
@@ -454,6 +454,7 @@ sub find_remote_single {
     my $subdir = $sub =~ m+/$+ || $sub eq '' ? $sub : $sub . '/';
     my @lines = keys %{{ map { $_ => 1 } $ftp->dir($sub), $ftp->dir($subdir . '.*') }};
     for my $line (@lines) {
+        chomp $line;
         if ($line =~ /(.).+\s(.+?)\/?$/) {
             my $type = $1;
             my $file = $2;
@@ -464,7 +465,7 @@ sub find_remote_single {
                     $file = $sub;
                 }
                 my $is_dir = $type eq 'd';
-                &$callback($file, $is_dir);
+                &$callback($file, $line, $is_dir);
                 if (!$no_recurse && $is_dir) {
                     find_remote_single($callback, $file . '/');
                 }
