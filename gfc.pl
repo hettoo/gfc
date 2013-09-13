@@ -95,7 +95,7 @@ my %pushed_dir;
 if ($mode eq 'test') {
     ftp_connect();
     print "Initial directory: $cwd\n";
-    find_remote_single(sub { print "$_[1]\n"; }, '', 1);
+    find_remote_single(sub { print "$_[1]\n"; }, @ARGV ? $ARGV[0] : '', 1);
 } elsif ($mode eq 'status') {
     load_ignore();
     load_local();
