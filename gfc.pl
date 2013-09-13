@@ -95,10 +95,12 @@ if ($mode eq 'status') {
     load_ignore();
     load_local();
     mode_status();
-    exit;
-}
-
-if ($mode eq 'pull') {
+} elsif ($mode eq 'sim') {
+    load_ignore();
+    load_remote();
+    load_local();
+    mode_sim();
+} elsif ($mode eq 'pull') {
     load_ignore();
     load_remote();
     load_local();
@@ -370,6 +372,18 @@ sub push_file {
     }
 }
 
+sub mode_sim {
+    ftp_connect();
+    find_remote(\&sim_file, @targets);
+    for my $file (keys %remote_mdtm) {
+        if (matches_target($file) && !defined $found{$file}) {
+            if (defined $local_mdtm{$file}) {
+                print "Deleted: $file\n";
+            }
+        }
+    }
+}
+
 sub mode_pull {
     ftp_connect();
     find_remote(\&pull_file, @targets);
@@ -385,6 +399,19 @@ sub mode_pull {
             undef $remote_mdtm{$file};
             $remote_changed = 1;
         }
+    }
+}
+
+sub sim_file {
+    my ($file, $is_dir) = @_;
+    my $local = $base . $file;
+    if (!$is_dir) {
+        my $mdtm = $ftp->mdtm($file) or error("unable to get modification time for $file");
+        $mdtm = int($mdtm);
+        if (!defined $remote_mdtm{$file} || $mdtm != $remote_mdtm{$file}) {
+            print "Changed: $file\n";
+        }
+        $found{$file} = 1;
     }
 }
 
