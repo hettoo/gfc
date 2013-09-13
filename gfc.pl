@@ -361,7 +361,7 @@ sub push_file {
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
             if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
-                print "> Pushing $remote\n";
+                print "> Pushing $remote (" . (-s $remote) . ")\n";
                 ftp_connect();
                 my $dir = dirname($remote);
                 if (!$pushed_dir{$dir}) {
@@ -448,7 +448,8 @@ sub pull_file {
         my $mdtm = $ftp->mdtm($file) or error("unable to get modification time for $file");
         $mdtm = int($mdtm);
         if (!defined $remote_mdtm{$file} || $mdtm != $remote_mdtm{$file}) {
-            print "< Pulling $file\n";
+            my $size = $ftp->size($file) or error("unable to get the size of $file");
+            print "< Pulling $file ($size)\n";
             $ftp->get($file, $local) or error("unable to get $file");
             $remote_mdtm{$file} = $mdtm;
             $remote_changed = 1;
