@@ -7,6 +7,7 @@ use Net::FTP;
 use Cwd;
 use File::Find;
 use File::Basename;
+use File::Path 'make_path';
 use Digest::MD5;
 
 my $ftp;
@@ -95,7 +96,6 @@ my %pushed_dir;
 if ($mode eq 'test') {
     ftp_connect();
     print "Initial directory: $cwd\n";
-    find_remote_single(sub { print "$_[1]\n"; }, @targets ? $targets[0] : '', 1);
 } elsif ($mode eq 'status') {
     load_ignore();
     load_local();
@@ -115,6 +115,10 @@ if ($mode eq 'test') {
     load_local();
     load_remote();
     mode_push();
+} elsif ($mode eq 'ls') {
+    mode_ls();
+} elsif ($mode eq 'mkdir') {
+    mode_mkdir();
 } elsif ($mode eq 'rmdir') {
     mode_rmdir();
 } elsif ($mode eq 'help') {
@@ -448,6 +452,27 @@ sub pull_file {
             $local_changed = 1;
         }
         $found{$file} = 1;
+    }
+}
+
+sub mode_ls {
+    ftp_connect();
+    for my $target (@targets) {
+        print "$base$target:\n";
+        find_remote_single(\&ls_file, $target, 1);
+    }
+}
+
+sub ls_file {
+    my ($file, $full, $is_dir) = @_;
+    print "$full\n";
+}
+
+sub mode_mkdir {
+    ftp_connect();
+    for my $target (@targets) {
+        $ftp->mkdir($target, 1) or error("unable to mkdir $target");
+        make_path($base . $target);
     }
 }
 
