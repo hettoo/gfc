@@ -89,6 +89,7 @@ my %remote_mdtm;
 assure_file($remote_file);
 
 my %found;
+my %pushed_dir;
 
 if ($mode eq 'status') {
     load_ignore();
@@ -96,23 +97,6 @@ if ($mode eq 'status') {
     mode_status();
     exit;
 }
-
-$ftp = Net::FTP->new($config{'host'}) or error("could not connect: $!");
-$ftp->login($config{'user'}, $config{'password'}) or error("could not login: $!");
-my $cwd = $ftp->pwd();
-if ($cwd !~ m+/$+) {
-    $cwd .= '/';
-}
-if (!defined $config{'dir'}) {
-    $config{'dir'} = '/';
-}
-if ($config{'dir'} !~ m+/$+) {
-    $config{'dir'} .= '/';
-}
-$cwd .= $config{'dir'};
-$ftp->mkdir($cwd, 1);
-$ftp->cwd($cwd) or error("could not change remote working directory to $cwd");
-$ftp->binary() or error("could not change to binary mode");
 
 if ($mode eq 'pull') {
     load_ignore();
@@ -131,6 +115,28 @@ if ($mode eq 'pull') {
 }
 
 quit();
+
+sub ftp_connect {
+    if (defined $ftp) {
+        return;
+    }
+    $ftp = Net::FTP->new($config{'host'}) or error("could not connect: $!");
+    $ftp->login($config{'user'}, $config{'password'}) or error("could not login: $!");
+    my $cwd = $ftp->pwd();
+    if ($cwd !~ m+/$+) {
+        $cwd .= '/';
+    }
+    if (!defined $config{'dir'}) {
+        $config{'dir'} = '/';
+    }
+    if ($config{'dir'} !~ m+/$+) {
+        $config{'dir'} .= '/';
+    }
+    $cwd .= $config{'dir'};
+    $ftp->mkdir($cwd, 1);
+    $ftp->cwd($cwd) or error("could not change remote working directory to $cwd");
+    $ftp->binary() or error("could not change to binary mode");
+}
 
 sub quit {
     my ($fake) = @_;
@@ -264,6 +270,7 @@ sub mode_push {
     for my $file (keys %local_mdtm) {
         if (matches_target($file) && !defined $found{$file}) {
             print "> Deleting $file\n";
+            ftp_connect();
             my $mdtm_remote;
             if (defined $remote_mdtm{$file}) {
                 $mdtm_remote = $ftp->mdtm($file) or error("unable to get modification time for $file");
@@ -329,15 +336,18 @@ sub push_file {
         $remote = substr $file, (length $base), length $file;
     }
     $found{$remote} = 1;
-    my $is_dir = -d $file;
-    if ($is_dir) {
-        $ftp->mkdir($remote, 1);
-    } else {
+    if (!-d $file) {
         my $mdtm = (stat $file)[9];
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
             if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
                 print "> Pushing $remote\n";
+                ftp_connect();
+                my $dir = dirname($remote);
+                if (!$pushed_dir{$dir}) {
+                    $ftp->mkdir($dir, 1);
+                    $pushed_dir{$dir} = 1;
+                }
                 my $mdtm_remote;
                 if (defined $remote_mdtm{$remote}) {
                     $mdtm_remote = $ftp->mdtm($remote) or error("unable to get modification time for $remote");
@@ -361,6 +371,7 @@ sub push_file {
 }
 
 sub mode_pull {
+    ftp_connect();
     find_remote(\&pull_file, @targets);
     for my $file (keys %remote_mdtm) {
         if (matches_target($file) && !defined $found{$file}) {
