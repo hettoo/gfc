@@ -344,7 +344,7 @@ sub push_file {
                     $mdtm_remote = int($mdtm_remote);
                 }
                 if (defined $remote_mdtm{$remote} && $mdtm_remote != $remote_mdtm{$remote}) {
-                    error("$remote has changed on the server, pull first\n");
+                    error("$remote has changed on the server, pull first");
                 } else {
                     $ftp->put($file, $remote) or error("unable to put $remote");
                     $mdtm_remote = $ftp->mdtm($remote) or error("unable to get modification time for $remote");
@@ -436,7 +436,7 @@ sub find_remote {
 sub md5_file {
     my ($file) = @_;
     my $ctx = Digest::MD5->new;
-    open my $fh, '<', $file or error("unable to read $file\n");
+    open my $fh, '<', $file or error("unable to read $file");
     $ctx->addfile($fh);
     close $fh;
     return $ctx->hexdigest;
