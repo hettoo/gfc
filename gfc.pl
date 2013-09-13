@@ -241,7 +241,15 @@ sub mode_push {
     find({'wanted' => \&push_file, 'preprocess' => \&local_filter}, @targets_full);
     for my $file (keys %local_mdtm) {
         if (matches_target($file) && !defined $found{$file}) {
-            print "Deleting $file\n";
+            print "> Deleting $file\n";
+            my $mdtm_remote;
+            if (defined $remote_mdtm{$file}) {
+                $mdtm_remote = $ftp->mdtm($file) or die "Unable to get modification time for $file";
+                $mdtm_remote = int($mdtm_remote);
+            }
+            if (defined $remote_mdtm{$file} && $mdtm_remote != $remote_mdtm{$file}) {
+                die "$file has changed on the server, pull first\n";
+            }
             $ftp->delete($file);
             undef $remote_mdtm{$file};
             undef $local_mdtm{$file};
@@ -305,6 +313,7 @@ sub push_file {
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
             if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
+                print "> Pushing $remote\n";
                 my $mdtm_remote;
                 if (defined $remote_mdtm{$remote}) {
                     $mdtm_remote = $ftp->mdtm($remote) or die "Unable to get modification time for $remote";
@@ -313,7 +322,6 @@ sub push_file {
                 if (defined $remote_mdtm{$remote} && $mdtm_remote != $remote_mdtm{$remote}) {
                     die "$remote has changed on the server, pull first\n";
                 } else {
-                    print "Pushing $remote\n";
                     $ftp->put($file, $remote) or die "Unable to put $remote";
                     $mdtm_remote = $ftp->mdtm($remote) or die "Unable to get modification time for $remote";
                     $mdtm_remote = int($mdtm_remote);
@@ -331,7 +339,8 @@ sub mode_pull {
     for my $file (keys %remote_mdtm) {
         if (matches_target($file) && !defined $found{$file}) {
             if (defined $local_mdtm{$file}) {
-                print "Deleting $file\n";
+                print "< Deleting $file\n";
+                unlink $base . $file;
                 undef $local_mdtm{$file};
                 undef $local_hash{$file};
             }
@@ -351,7 +360,7 @@ sub pull_file {
         my $mdtm = $ftp->mdtm($file) or die "Unable to get modification time for $file";
         $mdtm = int($mdtm);
         if (!defined $remote_mdtm{$file} || $mdtm != $remote_mdtm{$file}) {
-            print "Pulling $file\n";
+            print "< Pulling $file\n";
             $ftp->get($file, $local) or die "Unable to get $file";
             $remote_mdtm{$file} = $mdtm;
             my $mdtm_local = (stat $local)[9];
