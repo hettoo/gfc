@@ -226,7 +226,7 @@ sub status_file {
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
             if (!defined $local_hash{$remote}) {
-                print "New file: $remote\n";
+                print "New: $remote\n";
             } elsif ($hash ne $local_hash{$remote}) {
                 print "Modified: $remote\n";
             }
@@ -304,8 +304,11 @@ sub find_remote {
             my $file = $2;
             if (filter_file($file, $base . $sub)) {
                 $file = $sub . $file;
-                &$callback($file, $type eq 'd');
-                find_remote($file . '/', $callback);
+                my $is_dir = $type eq 'd';
+                &$callback($file, $is_dir);
+                if ($is_dir) {
+                    find_remote($file . '/', $callback);
+                }
             }
         }
     }
