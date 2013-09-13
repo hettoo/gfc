@@ -121,6 +121,8 @@ if ($mode eq 'test') {
     mode_mkdir();
 } elsif ($mode eq 'rmdir') {
     mode_rmdir();
+} elsif ($mode eq 'site') {
+    mode_site();
 } elsif ($mode eq 'help') {
     help(0);
 } else {
@@ -482,6 +484,11 @@ sub mode_rmdir {
         $ftp->rmdir($target) or error("unable to rmdir $target");
         rmdir $base . $target;
     }
+}
+
+sub mode_site {
+    ftp_connect();
+    $ftp->site("@ARGV") or error("site command failed");
 }
 
 sub find_remote_single {
