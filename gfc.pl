@@ -139,6 +139,9 @@ sub ftp_cd {
     if ($sub !~ m+/$+) {
         $sub .= '/';
     }
+    if ($cwd eq '/') {
+        $cwd = '';
+    }
     $cwd .= $sub;
     $ftp->mkdir($cwd, 1);
     $ftp->cwd($cwd) or error("could not change remote working directory to $cwd");
@@ -406,7 +409,7 @@ sub push_file {
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
             if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
-                print "> Pushing $remote\n";
+                print "> Pushing $remote (" . (-s $file) . ")\n";
                 ftp_connect();
                 my $dir = dirname($remote);
                 if (!$pushed_dir{$dir}) {
@@ -467,15 +470,13 @@ sub sim_file {
 
 sub pull_file {
     my ($file, $full, $is_dir) = @_;
-    my $local = $base . $file;
-    if ($is_dir) {
-        if (!-d $local) {
-            mkdir $local or error("unable to create directory $local");
-        }
-    } else {
+    if (!$is_dir) {
         my $mdtm = remote_mdtm($file);
         if (!defined $remote_mdtm{$file} || $mdtm != $remote_mdtm{$file}) {
-            print "< Pulling $file\n";
+            my $size = $ftp->size($file);
+            print "< Pulling $file ($size)\n";
+            my $local = $base . $file;
+            make_path(dirname($local));
             $ftp->get($file, $local) or error("unable to get $file");
             update_remote($file, $mdtm);
             update_local($file);
