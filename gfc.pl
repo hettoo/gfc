@@ -7,6 +7,7 @@ use Net::FTP;
 use Cwd;
 use File::Find;
 use File::Basename;
+use File::Copy;
 use File::Path 'make_path';
 use Digest::MD5;
 
@@ -120,6 +121,13 @@ if ($mode eq 'test') {
     load_local();
     load_remote();
     mode_push();
+} elsif ($mode eq 'backup') {
+    load_ignore();
+    load_local();
+    mode_backup();
+} elsif ($mode eq 'reset') {
+    load_ignore();
+    mode_reset();
 } elsif ($mode eq 'ls') {
     mode_ls();
 } elsif ($mode eq 'mkdir') {
@@ -272,7 +280,7 @@ sub matches_target {
 
 sub filter_file {
     my ($file, $dir) = @_;
-    if ($file ne '.' && $file ne '..' && $file ne '.gfc' && $file ne '.git' && $file ne '.gitignore' && $file !~ /^\.(.*)\.sw.$/ && $file !~ /~$/ && $file !~ m+/.+) {
+    if ($file ne '.' && $file ne '..' && $file ne '.gfc' && $file ne '.git' && $file ne '.gitignore' && $file !~ /^\.(.*)\.sw.$/ && $file !~ /~$/ && $file !~ m+/.+ && $file !~ /\.gfc_backup$/) {
         my $full_file = $dir . $file;
         for my $ignore (@ignore) {
             if (file_match($full_file, $base . $ignore)) {
@@ -360,6 +368,64 @@ sub mode_push {
             remove_local($file, 0);
         }
     }
+}
+
+sub mode_backup {
+    find({'wanted' => \&backup_file, 'preprocess' => \&local_filter}, @targets_full);
+}
+
+sub backup_file {
+    my $file = $File::Find::name;
+    my $remote;
+    if ($file . '/' eq $base) {
+        $remote = '';
+    } else {
+        $remote = substr $file, (length $base), length $file;
+    }
+    if (!-d $file) {
+        my $mdtm = (stat $file)[9];
+        if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
+            print "= Backing up $file\n";
+            copy($file, $file . '.gfc_backup');
+        }
+    }
+}
+
+sub mode_reset {
+    find({'wanted' => \&reset_file, 'preprocess' => \&filter_reset}, @targets_full);
+}
+
+sub reset_file {
+    my $file = $File::Find::name;
+    my $remote;
+    if ($file . '/' eq $base) {
+        $remote = '';
+    } else {
+        $remote = substr $file, (length $base), length $file;
+    }
+    if (!-d $file) {
+        my $origin = $file;
+        $origin =~ s/\.gfc_backup$//;
+        if ($file ne $origin) {
+            print "= Resetting $origin\n";
+            move($file, $origin);
+        }
+    }
+}
+
+sub filter_reset {
+    my(@files) = @_;
+    my $dir = $File::Find::dir;
+    if ($dir !~ m+/$+) {
+        $dir .= '/';
+    }
+    my @result;
+    for my $file (@files) {
+        if (-d $dir . $file || $file =~ /\.gfc_backup$/) {
+            push @result, $file;
+        }
+    }
+    return @result;
 }
 
 sub local_filter {
@@ -472,8 +538,8 @@ sub clone_file {
     }
     if (!-d $file) {
         my $mdtm = (stat $file)[9];
-        if (!defined $local_mdtm{$remote}) {
-            print "< Cleaning $remote\n";
+        if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
+            print "< Cleaning up $remote\n";
             unlink $file;
         }
     }
