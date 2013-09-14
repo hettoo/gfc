@@ -267,7 +267,7 @@ sub matches_target {
 
 sub filter_file {
     my ($file, $dir) = @_;
-    if ($file ne '.' && $file ne '..' && $file ne '.gfc' && $file ne '.git' && $file !~ /\.(.*)\.sw.$/ && $file !~ /~$/) {
+    if ($file ne '.' && $file ne '..' && $file ne '.gfc' && $file ne '.git' && $file ne '.gitignore' && $file !~ /^\.(.*)\.sw.$/ && $file !~ /~$/ && $file !~ m+/.+) {
         my $full_file = $dir . $file;
         for my $ignore (@ignore) {
             if (file_match($full_file, $base . $ignore)) {
