@@ -473,7 +473,8 @@ sub clone_file {
     if (!-d $file) {
         my $mdtm = (stat $file)[9];
         if (!defined $local_mdtm{$remote}) {
-            unlink $base . $remote;
+            print "< Cleaning $remote\n";
+            unlink $file;
         }
     }
 }
