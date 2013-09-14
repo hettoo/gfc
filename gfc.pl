@@ -487,6 +487,9 @@ sub pull_file {
 
 sub mode_ls {
     ftp_connect();
+    if (!@ARGV) {
+        @targets = $offset;
+    }
     for my $target (@targets) {
         print "$cwd$target:\n";
         find_remote_single(\&ls_file, $target, 1);
