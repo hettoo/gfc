@@ -110,6 +110,11 @@ if ($mode eq 'test') {
     load_remote();
     load_local();
     mode_pull();
+} elsif ($mode eq 'clone') {
+    load_ignore();
+    load_remote();
+    load_local();
+    mode_clone();
 } elsif ($mode eq 'push') {
     load_ignore();
     load_local();
@@ -381,8 +386,7 @@ sub status_file {
         $remote = substr $file, (length $base), length $file;
     }
     $found{$remote} = 1;
-    my $is_dir = -d $file;
-    if (!$is_dir) {
+    if (!-d $file) {
         my $mdtm = (stat $file)[9];
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             my $hash = md5_file($file);
@@ -449,6 +453,27 @@ sub mode_pull {
             print "< Deleting $file\n";
             remove_local($file, 1);
             remove_remote($file, 0);
+        }
+    }
+}
+
+sub mode_clone {
+    mode_pull();
+    find({'wanted' => \&clone_file, 'preprocess' => \&local_filter}, @targets_full);
+}
+
+sub clone_file {
+    my $file = $File::Find::name;
+    my $remote;
+    if ($file . '/' eq $base) {
+        $remote = '';
+    } else {
+        $remote = substr $file, (length $base), length $file;
+    }
+    if (!-d $file) {
+        my $mdtm = (stat $file)[9];
+        if (!defined $local_mdtm{$remote}) {
+            unlink $base . $remote;
         }
     }
 }
