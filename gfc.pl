@@ -80,6 +80,7 @@ close $fh;
 
 my $ignore_file = $gfc_dir . 'ignore';
 my @ignore;
+my @full_ignore;
 assure_file($ignore_file);
 
 my $local_file = $gfc_dir . 'local';
@@ -203,7 +204,11 @@ sub load_ignore {
     open $fh, '<', $ignore_file or error("unable to read $ignore_file");
     while (my $line = <$fh>) {
         chomp $line;
-        push @ignore, $line;
+        if ($line =~ s+^/++) {
+            push @full_ignore, $line;
+        } else {
+            push @ignore, $line;
+        }
     }
     close $fh;
 }
@@ -301,6 +306,11 @@ sub matches_target {
 
 sub filter_file {
     my ($file, $dir) = @_;
+    for my $ignore (@full_ignore) {
+        if (file_match($file, $ignore)) {
+            return 0;
+        }
+    }
     if ($file ne '.' && $file ne '..' && $file ne '.gfc' && $file ne '.git' && $file ne '.gitignore' && $file !~ /^\.(.*)\.sw.$/ && $file !~ /~$/ && $file !~ m+/.+ && $file !~ /\.gfc_backup$/) {
         my $full_file = $dir . $file;
         for my $ignore (@ignore) {
