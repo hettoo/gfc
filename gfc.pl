@@ -134,6 +134,10 @@ if ($mode eq 'test') {
     mode_clean();
 } elsif ($mode eq 'ls') {
     mode_ls();
+} elsif ($mode eq 'mv') {
+    load_local();
+    load_remote();
+    mode_mv();
 } elsif ($mode eq 'mkdir') {
     mode_mkdir();
 } elsif ($mode eq 'rmdir') {
@@ -582,7 +586,14 @@ sub mode_pull {
 
 sub mode_clone {
     mode_pull();
+    %found = ();
     find({'wanted' => \&clone_file, 'preprocess' => \&local_filter}, @targets_full);
+    for my $file (keys %local_mdtm) {
+        if (matches_target($file) && !defined $found{$file} && filter_file($file, $base)) {
+            print "< Cleaning up $file\n";
+            remove_local($file, 0);
+        }
+    }
 }
 
 sub clone_file {
@@ -597,8 +608,9 @@ sub clone_file {
         my $mdtm = (stat $file)[9];
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
             print "< Cleaning up $remote\n";
-            unlink $file;
+            remove_local($remote, 1);
         }
+        $found{$remote} = 1;
     }
 }
 
@@ -650,19 +662,57 @@ sub ls_file {
     print "$full\n";
 }
 
+sub mode_mv {
+    ftp_connect();
+    if (@ARGV < 2) {
+        error("source and destination required");
+    }
+    my $destination = pop @targets;
+    my $is_dir = $destination =~ s+/$++ || -d $base . $destination;
+    if ($is_dir && $destination ne '') {
+        $destination .= '/';
+    }
+    for my $target (@targets) {
+        my $result = $destination;
+        if ($is_dir) {
+            $result .= basename($target);
+        }
+        my $parent = dirname($result);
+        $ftp->mkdir($parent, 1);
+        $ftp->rename($target, $result) or error("unable to move $target to $result on the server");
+        for my $remote (keys %remote_mdtm) {
+            if (file_match($remote, $target)) {
+                my $mdtm = $remote_mdtm{$remote};
+                remove_remote($remote, 0);
+                $remote_mdtm{$result} = $mdtm;
+            }
+        }
+        move($base . $target, $base . $result) or error("unable to move $target to $result");
+        for my $local (keys %local_mdtm) {
+            if (file_match($local, $target)) {
+                my $mdtm = $local_mdtm{$local};
+                my $hash = $local_hash{$local};
+                remove_local($local, 0);
+                $local_mdtm{$result} = $mdtm;
+                $local_hash{$result} = $hash;
+            }
+        }
+    }
+}
+
 sub mode_mkdir {
     ftp_connect();
     for my $target (@targets) {
-        $ftp->mkdir($target, 1) or error("unable to mkdir $target");
-        make_path($base . $target);
+        $ftp->mkdir($target, 1) or error("unable to mkdir $target on the server");
+        make_path($base . $target) or error("unable to mkdir $target");
     }
 }
 
 sub mode_rmdir {
     ftp_connect();
     for my $target (@targets) {
-        $ftp->rmdir($target) or error("unable to rmdir $target");
-        rmdir $base . $target;
+        $ftp->rmdir($target) or error("unable to rmdir $target on the server");
+        rmdir $base . $target or error("unable to rmdir $target");
     }
 }
 
