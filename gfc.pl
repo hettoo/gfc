@@ -314,21 +314,24 @@ sub matches_target {
 
 sub filter_file {
     my ($file, $dir) = @_;
+    if ($file eq '.' || $file eq '..' || $file eq '.gfc' || $file eq '.git' || $file eq '.gitignore' || $file =~ /^\.(.*)\.sw.$/ || $file =~ /~$/ || $file =~ m+/.+ || $file =~ /\.gfc_backup$/) {
+        return 0;
+    }
     for my $ignore (@full_ignore) {
         if (file_match($file, $ignore)) {
             return 0;
         }
     }
-    if ($file ne '.' && $file ne '..' && $file ne '.gfc' && $file ne '.git' && $file ne '.gitignore' && $file !~ /^\.(.*)\.sw.$/ && $file !~ /~$/ && $file !~ m+/.+ && $file !~ /\.gfc_backup$/) {
-        my $full_file = $dir . $file;
-        for my $ignore (@ignore) {
-            if (file_match($full_file, $base . $ignore)) {
-                return 0;
-            }
+    my $full_file = $dir . $file;
+    my $result = 1;
+    for my $ignore (@ignore) {
+        my $real = $ignore;
+        my $negated = $real =~ s/^!//;
+        if (file_match($full_file, $base . $real)) {
+            $result = $negated;
         }
-        return 1;
     }
-    return 0;
+    return $result;
 }
 
 sub remove_local {
