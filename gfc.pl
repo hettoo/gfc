@@ -255,20 +255,38 @@ sub save_remote {
     close $fh;
 }
 
-sub file_match {
-    my ($file, $pattern) = @_;
-    $pattern =~ s+/$++;
-    if (length $file < length $pattern) {
-        return 0;
-    }
-    if ($file eq $pattern) {
+sub pattern_match {
+    my ($string, $pattern) = @_;
+    if ($string eq $pattern) {
         return 1;
     }
-    my $parent = dirname($file);
-    if ($parent eq '.') {
-        $parent = '';
+    if (length $pattern == 0) {
+        return 0;
     }
-    return file_match($parent, $pattern);
+    my $p = substr $pattern, 0, 1;
+    if ($p eq '*') {
+        if (pattern_match($string, (substr $pattern, 1)) || (length $string > 0 && pattern_match((substr $string, 1), $pattern))) {
+            return 1;
+        }
+    }
+    return (substr $string, 0, 1) eq $p && pattern_match((substr $string, 1), (substr $pattern, 1));
+}
+
+sub file_match {
+    my ($file, $pattern) = @_;
+    $file =~ s+/$++;
+    $pattern =~ s+/(\*/?)*$++;
+    my @p = split /\//, $pattern;
+    my @f = split /\//, $file;
+    if (@f < @p) {
+        return 0;
+    }
+    for my $i (0 .. $#p) {
+        if (!pattern_match($f[$i], $p[$i])) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 sub matches_target {
