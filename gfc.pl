@@ -128,6 +128,9 @@ if ($mode eq 'test') {
 } elsif ($mode eq 'reset') {
     load_ignore();
     mode_reset();
+} elsif ($mode eq 'clean') {
+    load_ignore();
+    mode_clean();
 } elsif ($mode eq 'ls') {
     mode_ls();
 } elsif ($mode eq 'mkdir') {
@@ -392,7 +395,7 @@ sub backup_file {
 }
 
 sub mode_reset {
-    find({'wanted' => \&reset_file, 'preprocess' => \&filter_reset}, @targets_full);
+    find({'wanted' => \&reset_file, 'preprocess' => \&filter_backup}, @targets_full);
 }
 
 sub reset_file {
@@ -413,7 +416,29 @@ sub reset_file {
     }
 }
 
-sub filter_reset {
+sub mode_clean {
+    find({'wanted' => \&clean_file, 'preprocess' => \&filter_backup}, @targets_full);
+}
+
+sub clean_file {
+    my $file = $File::Find::name;
+    my $remote;
+    if ($file . '/' eq $base) {
+        $remote = '';
+    } else {
+        $remote = substr $file, (length $base), length $file;
+    }
+    if (!-d $file) {
+        my $origin = $file;
+        $origin =~ s/\.gfc_backup$//;
+        if ($file ne $origin) {
+            print "= Cleaning up backup for $origin\n";
+            unlink $file;
+        }
+    }
+}
+
+sub filter_backup {
     my(@files) = @_;
     my $dir = $File::Find::dir;
     if ($dir !~ m+/$+) {
