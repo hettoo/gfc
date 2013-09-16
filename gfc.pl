@@ -819,6 +819,58 @@ sub help {
     if (!defined $signal) {
         $signal = 1;
     }
-    print "Usage: $0 <mode> [arguments]\n";
+    print <<EOT;
+Usage: $0 <mode> [arguments]
+
+MODES
+    test
+        Connect to the server and print the resulting working directory.
+
+    status
+        Show files changed since the last push.
+
+    sim
+        Show files changed on the server since the last pull.
+
+    pull
+        Pull files changed on the server from the server.
+
+    clone
+        Pull files changed locally and on the server from the server.
+
+    push
+        Push local changes to the server. Fails when a file was also changed on
+        the server.
+
+    backup
+        Backup changed and new files.
+
+    reset
+        Reset backed up files.
+
+    clean
+        Clean up backup files.
+
+    ls <directories>
+        List directories on the server.
+
+    mv <files> <destination>
+        Move files locally and on the server to destination.
+
+    rm <files>
+        Remove files locally and on the server recursively.
+
+    mkdir <directories>
+        Create directories locally and on the server.
+
+    rmdir <directories>
+        Remove empty directories locally and on the server.
+
+    site <command>
+        Submit a custom SITE command to the server.
+
+    help
+        Show this message and exit.
+EOT
     exit $signal;
 }
