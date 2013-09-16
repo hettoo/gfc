@@ -21,6 +21,9 @@ my $mode = shift @ARGV;
 if (!defined $mode) {
     help();
 }
+if ($mode eq 'help') {
+    help(0);
+}
 
 my $base = getcwd();
 $base =~ s+/$++;
@@ -148,8 +151,6 @@ if ($mode eq 'test') {
     mode_rmdir();
 } elsif ($mode eq 'site') {
     mode_site();
-} elsif ($mode eq 'help') {
-    help(0);
 } else {
     help();
 }
