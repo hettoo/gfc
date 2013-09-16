@@ -8,7 +8,7 @@ use Cwd;
 use File::Find;
 use File::Basename;
 use File::Copy;
-use File::Path 'make_path';
+use File::Path qw(make_path remove_tree);
 use Digest::MD5;
 
 my $ftp;
@@ -138,6 +138,10 @@ if ($mode eq 'test') {
     load_local();
     load_remote();
     mode_mv();
+} elsif ($mode eq 'rm') {
+    load_local();
+    load_remote();
+    mode_rm();
 } elsif ($mode eq 'mkdir') {
     mode_mkdir();
 } elsif ($mode eq 'rmdir') {
@@ -664,7 +668,7 @@ sub ls_file {
 
 sub mode_mv {
     ftp_connect();
-    if (@ARGV < 2) {
+    if (@targets < 2) {
         error("source and destination required");
     }
     my $destination = pop @targets;
@@ -695,6 +699,36 @@ sub mode_mv {
                 remove_local($local, 0);
                 $local_mdtm{$result} = $mdtm;
                 $local_hash{$result} = $hash;
+            }
+        }
+    }
+}
+
+sub mode_rm {
+    ftp_connect();
+    if (@ARGV < 1) {
+        error("target required");
+    }
+    for my $target (@targets) {
+        my $is_dir = $target =~ s+/$++ || -d $base . $target;
+        if ($is_dir) {
+            $ftp->rmdir($target, 1) or error("unable to remove $target on the server");
+        } else {
+            $ftp->delete($target) or error("unable to remove $target on the server");
+        }
+        for my $remote (keys %remote_mdtm) {
+            if (file_match($remote, $target)) {
+                remove_remote($remote, 1);
+            }
+        }
+        if ($is_dir) {
+            remove_tree($base . $target) or error("unable to remove $target");
+        } else {
+            unlink $base . $target or error("unable to remove $target");
+        }
+        for my $local (keys %local_mdtm) {
+            if (file_match($local, $target)) {
+                remove_local($local, 1);
             }
         }
     }
