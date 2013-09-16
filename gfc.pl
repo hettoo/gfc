@@ -401,12 +401,12 @@ sub backup_file {
     if ($file . '/' eq $base) {
         $remote = '';
     } else {
-        $remote = substr $file, (length $base), length $file;
+        $remote = substr $file, (length $base);
     }
     if (!-d $file) {
         my $mdtm = (stat $file)[9];
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
-            print "= Backing up $file\n";
+            print "= Backing up $remote\n";
             copy($file, $file . '.gfc_backup');
         }
     }
@@ -426,9 +426,11 @@ sub reset_file {
     }
     if (!-d $file) {
         my $origin = $file;
+        my $remote_origin = $remote;
         $origin =~ s/\.gfc_backup$//;
+        $remote_origin =~ s/\.gfc_backup$//;
         if ($file ne $origin) {
-            print "= Resetting $origin\n";
+            print "= Resetting $remote_origin\n";
             move($file, $origin);
         }
     }
@@ -448,9 +450,11 @@ sub clean_file {
     }
     if (!-d $file) {
         my $origin = $file;
+        my $remote_origin = $remote;
         $origin =~ s/\.gfc_backup$//;
+        $remote_origin =~ s/\.gfc_backup$//;
         if ($file ne $origin) {
-            print "= Cleaning up backup for $origin\n";
+            print "= Cleaning up backup for $remote_origin\n";
             unlink $file;
         }
     }
