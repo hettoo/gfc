@@ -378,7 +378,7 @@ sub update_local {
 sub mode_status {
     find({'wanted' => \&status_file, 'preprocess' => \&local_filter}, @targets_full);
     for my $file (keys %local_mdtm) {
-        if (!defined $found{$file}) {
+        if (matches_target($file) && !defined $found{$file} && filter_file($file, $base)) {
             print "Deleted: $file\n";
         }
     }
@@ -387,7 +387,7 @@ sub mode_status {
 sub mode_push {
     find({'wanted' => \&push_file, 'preprocess' => \&local_filter}, @targets_full);
     for my $file (keys %local_mdtm) {
-        if (matches_target($file) && !defined $found{$file}) {
+        if (matches_target($file) && !defined $found{$file} && filter_file($file, $base)) {
             print "> Deleting $file\n";
             ftp_connect();
             my $mdtm_remote;
@@ -560,7 +560,7 @@ sub mode_sim {
     ftp_connect();
     find_remote(\&sim_file, @targets);
     for my $file (keys %remote_mdtm) {
-        if (matches_target($file) && !defined $found{$file}) {
+        if (matches_target($file) && !defined $found{$file} && filter_file($file, $base)) {
             if (-e $base . $file) {
                 print "Deleted: $file\n";
             }
@@ -572,7 +572,7 @@ sub mode_pull {
     ftp_connect();
     find_remote(\&pull_file, @targets);
     for my $file (keys %remote_mdtm) {
-        if (matches_target($file) && !defined $found{$file}) {
+        if (matches_target($file) && !defined $found{$file} && filter_file($file, $base)) {
             print "< Deleting $file\n";
             remove_local($file, 1);
             remove_remote($file, 0);
