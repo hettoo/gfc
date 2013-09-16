@@ -468,7 +468,7 @@ sub clean_file {
         $origin =~ s/\.gfc_backup$//;
         $remote_origin =~ s/\.gfc_backup$//;
         if ($file ne $origin) {
-            print "= Cleaning up backup for $remote_origin\n";
+            print "= Resetting $remote_origin\n";
             unlink $file;
         }
     }
@@ -590,7 +590,7 @@ sub mode_clone {
     find({'wanted' => \&clone_file, 'preprocess' => \&local_filter}, @targets_full);
     for my $file (keys %local_mdtm) {
         if (matches_target($file) && !defined $found{$file} && filter_file($file, $base)) {
-            print "< Cleaning up $file\n";
+            print "< Unreferencing $file\n";
             remove_local($file, 0);
         }
     }
