@@ -346,6 +346,27 @@ sub remove_local {
     $local_changed = 1;
 }
 
+sub local_mdtm {
+    my ($file, $only_if_cached) = @_;
+    if ($only_if_cached && !defined $local_mdtm{$file}) {
+        return undef;
+    }
+    return (stat $base . $file)[9];
+}
+
+sub local_hash {
+    my ($file, $only_if_cached) = @_;
+    if ($only_if_cached && !defined $local_hash{$file}) {
+        return undef;
+    }
+    my $ctx = Digest::MD5->new;
+    $file = $base . $file;
+    open my $fh, '<', $file or error("unable to read $file");
+    $ctx->addfile($fh);
+    close $fh;
+    return $ctx->hexdigest;
+}
+
 sub remote_mdtm {
     my ($file, $only_if_cached) = @_;
     if ($only_if_cached && !defined $remote_mdtm{$file}) {
@@ -375,12 +396,11 @@ sub update_remote {
 
 sub update_local {
     my ($remote, $mdtm, $hash) = @_;
-    my $file = $base . $remote;
     if (!defined $mdtm) {
-        $mdtm = (stat $file)[9];
+        $mdtm = local_mdtm($remote);
     }
     if (!defined $hash) {
-        $hash = md5_file($file);
+        $hash = local_hash($remote);
     }
     $local_mdtm{$remote} = $mdtm;
     $local_hash{$remote} = $hash;
@@ -426,10 +446,13 @@ sub backup_file {
         $remote = substr $file, (length $base);
     }
     if (!-d $file) {
-        my $mdtm = (stat $file)[9];
+        my $mdtm = local_mdtm($remote, 1);
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
-            print "= Backing up $remote\n";
-            copy($file, $file . '.gfc_backup');
+            my $hash = local_hash($remote, 1);
+            if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
+                print "= Backing up $remote\n";
+                copy($file, $file . '.gfc_backup');
+            }
         }
     }
 }
@@ -522,9 +545,9 @@ sub status_file {
     }
     $found{$remote} = 1;
     if (!-d $file) {
-        my $mdtm = (stat $file)[9];
+        my $mdtm = local_mdtm($remote, 1);
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
-            my $hash = md5_file($file);
+            my $hash = local_hash($remote, 1);
             if (!defined $local_hash{$remote}) {
                 print "Added: $remote\n";
             } elsif ($hash ne $local_hash{$remote}) {
@@ -544,9 +567,9 @@ sub push_file {
     }
     $found{$remote} = 1;
     if (!-d $file) {
-        my $mdtm = (stat $file)[9];
+        my $mdtm = local_mdtm($remote);
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
-            my $hash = md5_file($file);
+            my $hash = local_hash($remote);
             if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
                 print "> Pushing $remote (" . (-s $file) . ")\n";
                 ftp_connect();
@@ -613,10 +636,13 @@ sub clone_file {
         $remote = substr $file, (length $base), length $file;
     }
     if (!-d $file) {
-        my $mdtm = (stat $file)[9];
+        my $mdtm = local_mdtm($remote);
         if (!defined $local_mdtm{$remote} || $mdtm != $local_mdtm{$remote}) {
-            print "< Cleaning up $remote\n";
-            remove_local($remote, 1);
+            my $hash = local_hash($remote, 1);
+            if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
+                print "< Cleaning up $remote\n";
+                remove_local($remote, 1);
+            }
         }
         $found{$remote} = 1;
     }
@@ -790,15 +816,6 @@ sub find_remote {
     for my $sub (@list) {
         find_remote_single($callback, $sub);
     }
-}
-
-sub md5_file {
-    my ($file) = @_;
-    my $ctx = Digest::MD5->new;
-    open my $fh, '<', $file or error("unable to read $file");
-    $ctx->addfile($fh);
-    close $fh;
-    return $ctx->hexdigest;
 }
 
 sub resolve_file {
