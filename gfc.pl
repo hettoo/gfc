@@ -315,7 +315,7 @@ sub matches_target {
 
 sub filter_file {
     my ($file, $dir) = @_;
-    if ($file eq '.' || $file eq '..' || $file eq '.gfc' || $file eq '.git' || $file eq '.gitignore' || $file eq '.gitmodules' || $file =~ /^\.(.*)\.sw.$/ || $file =~ /~$/ || $file =~ m+/.+ || $file =~ /\.gfc_backup$/) {
+    if ($file eq '.' || $file eq '..' || $file eq '.gfc' || $file eq '.git' || $file eq '.gitignore' || $file eq '.gitmodules' || $file =~ /^\.(.*)\.sw.$/ || $file =~ /~$/ || $file =~ m+/\.$+ || $file =~ /\.gfc_backup$/) {
         return 0;
     }
     for my $ignore (@full_ignore) {
@@ -583,6 +583,9 @@ sub push_file {
                     error("$remote has changed on the server, pull first");
                 } else {
                     $ftp->put($file, $remote) or error("unable to put $remote");
+                    if (!defined $local_hash{$remote}) {
+                        $ftp->site("CHMOD 644 $remote") or error("unable to chmod $remote");
+                    }
                     update_remote($remote);
                     update_local($remote, $mdtm, $hash);
                 }
