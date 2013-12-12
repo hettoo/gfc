@@ -798,7 +798,7 @@ sub find_remote_single {
         if ($line =~ /(.).+\s(.+?)\/?$/) {
             my $type = $1;
             my $file = $2;
-            if (filter_file($file, $base . $sub)) {
+            if ($file !~ /\/./ && filter_file($file, $base . $sub)) {
                 if ($sub =~ m+/$+ || $sub eq '') {
                     $file = $subdir . $file;
                 } else {
