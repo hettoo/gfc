@@ -795,7 +795,7 @@ sub find_remote_single {
     my @lines = keys %{{ map { $_ => 1 } $ftp->dir($sub), $ftp->dir($subdir . '.*') }};
     for my $line (@lines) {
         chomp $line;
-        if ($line =~ /(.).+\s(.+?)\/?$/) {
+        if ($line =~ /(.).+\s[\d:]+\s(.+?)\/?$/) {
             my $type = $1;
             my $file = $2;
             if (filter_file($file, $base . $sub)) {
