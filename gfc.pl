@@ -514,7 +514,7 @@ sub mode_grep {
         $grep = shift @ARGV;
         shift @targets_full;
         if (!@targets_full) {
-            push @targets_full, $base;
+            push @targets_full, $base . $offset;
         }
         find({'wanted' => \&grep_file, 'preprocess' => \&local_filter}, @targets_full);
     }
