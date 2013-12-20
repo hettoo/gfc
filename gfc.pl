@@ -97,6 +97,7 @@ assure_file($remote_file);
 
 my %found;
 my %pushed_dir;
+my $grep;
 
 if ($mode eq 'test') {
     ftp_connect();
@@ -135,6 +136,9 @@ if ($mode eq 'test') {
 } elsif ($mode eq 'clean') {
     load_ignore();
     mode_clean();
+} elsif ($mode eq 'grep') {
+    load_ignore();
+    mode_grep();
 } elsif ($mode eq 'ls') {
     mode_ls();
 } elsif ($mode eq 'mv') {
@@ -505,6 +509,30 @@ sub clean_file {
     }
 }
 
+sub mode_grep {
+    if (@ARGV) {
+        $grep = shift @ARGV;
+        shift @targets_full;
+        if (!@targets_full) {
+            push @targets_full, $base . $offset;
+        }
+        find({'wanted' => \&grep_file, 'preprocess' => \&local_filter}, @targets_full);
+    }
+}
+
+sub grep_file {
+    my $file = $File::Find::name;
+    my $remote;
+    if ($file . '/' eq $base) {
+        $remote = '';
+    } else {
+        $remote = substr $file, (length $base), length $file;
+    }
+    if (!-d $file) {
+        system "grep -Hn $grep '$file' | sed 's#^$base##'";
+    }
+}
+
 sub filter_backup {
     my(@files) = @_;
     my $dir = $File::Find::dir;
@@ -865,6 +893,9 @@ MODES
     push
         Push local changes to the server. Fails when a file was also changed on
         the server.
+
+    grep
+        Find something in unignored files.
 
     backup
         Backup changed and new files.
