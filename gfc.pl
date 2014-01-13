@@ -96,7 +96,7 @@ my %remote_mdtm;
 assure_file($remote_file);
 
 my %found;
-my %pushed_dir;
+my %remote_dir;
 my $grep;
 
 if ($mode eq 'test') {
@@ -173,7 +173,6 @@ sub ftp_cd {
         $cwd = '';
     }
     $cwd .= $sub;
-    $ftp->mkdir($cwd, 1);
     $ftp->cwd($cwd) or error("could not change remote working directory to $cwd");
 }
 
@@ -585,6 +584,24 @@ sub status_file {
     }
 }
 
+sub create_remote_dir {
+    my($dir) = @_;
+    if (!$remote_dir{$dir} && $dir ne '' && $dir ne '.') {
+        my $parent = dirname($dir);
+        if ($parent eq '.') {
+            $parent = '';
+        }
+        find_remote_single(undef, $parent, 1);
+        if (!$remote_dir{$dir}) {
+            create_remote_dir($parent);
+            print "  > Creating directory $dir\n";
+            $ftp->mkdir($dir);
+            $ftp->site("CHMOD 755 $dir") or error("unable to chmod $dir");
+            $remote_dir{$dir} = 1;
+        }
+    }
+}
+
 sub push_file {
     my $file = $File::Find::name;
     my $remote;
@@ -601,11 +618,7 @@ sub push_file {
             if (!defined $local_hash{$remote} || $hash ne $local_hash{$remote}) {
                 print "> Pushing $remote (" . (-s $file) . ")\n";
                 ftp_connect();
-                my $dir = dirname($remote);
-                if (!$pushed_dir{$dir}) {
-                    $ftp->mkdir($dir, 1);
-                    $pushed_dir{$dir} = 1;
-                }
+                create_remote_dir(dirname($remote));
                 my $mdtm_remote = remote_mdtm($remote, 1);
                 if (defined $remote_mdtm{$remote} && $mdtm_remote != $remote_mdtm{$remote}) {
                     error("$remote has changed on the server, pull first");
@@ -743,7 +756,6 @@ sub mode_mv {
             $result .= basename($target);
         }
         my $parent = dirname($result);
-        $ftp->mkdir($parent, 1);
         $ftp->rename($target, $result) or error("unable to move $target to $result on the server");
         for my $remote (keys %remote_mdtm) {
             if (file_match($remote, $target)) {
@@ -833,7 +845,12 @@ sub find_remote_single {
                     $file = $sub;
                 }
                 my $is_dir = $type eq 'd';
-                &$callback($file, $line, $is_dir);
+                if ($is_dir) {
+                    $remote_dir{$file} = 1;
+                }
+                if (defined $callback) {
+                    &$callback($file, $line, $is_dir);
+                }
                 if (!$no_recurse && $is_dir) {
                     find_remote_single($callback, $file . '/');
                 }
