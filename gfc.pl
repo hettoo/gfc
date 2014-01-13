@@ -529,7 +529,7 @@ sub grep_file {
         $remote = substr $file, (length $base), length $file;
     }
     if (!-d $file) {
-        system "grep -Hn $grep '$file' | sed 's#^$base##'";
+        system "grep -Hn '$grep' '$file' | sed 's#^$base##'";
     }
 }
 
